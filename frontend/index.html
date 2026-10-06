@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎙️ Asistente de Voz · Dashboard</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            slate: {
+              850: '#151f33',
+              950: '#0a0f1d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Estilos personalizados y utilidades de microanimación */
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(51, 65, 85, 0.8);
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 1);
+    }
+    .card {
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
+    }
+    @keyframes spin-once {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .spinning {
+      animation: spin-once 0.7s linear;
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      
+      <!-- Título y Subtítulo -->
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="text-3xl filter drop-shadow">🎙️</span>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-indigo-300 bg-clip-text text-transparent">
+              Asistente de Voz · Dashboard
+            </h1>
+            <p id="current-date" class="text-xs sm:text-sm text-slate-400 font-medium">
+              Cargando fecha...
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estado del Modo y Acciones -->
+      <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+        <!-- Badge de Modo -->
+        <div id="mode-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+          <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+          <span>Detectando modo...</span>
+        </div>
+
+        <!-- Botón de Actualizar & Auto-refresh -->
+        <div class="flex items-center gap-2">
+          <div class="hidden md:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+            <span class="text-slate-500">Auto:</span>
+            <span id="countdown" class="font-mono text-indigo-400 font-semibold">30s</span>
+          </div>
+
+          <button id="btn-refresh" onclick="cargarTodo(true)" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-medium shadow-md shadow-indigo-600/20 border border-indigo-500 transition-all active:scale-95 disabled:opacity-50">
+            <span id="refresh-icon" class="inline-block">🔄</span>
+            <span>Actualizar</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== CONTENEDOR PRINCIPAL ==================== -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6">
+
+    <!-- Mensaje Global de Error (oculto por defecto) -->
+    <div id="global-error" class="hidden p-4 rounded-xl bg-red-950/60 border border-red-800/80 text-red-200 text-sm flex items-start gap-3">
+      <span class="text-lg">⚠️</span>
+      <div class="flex-1">
+        <p class="font-semibold">Aviso de conexión:</p>
+        <p id="global-error-msg" class="text-xs text-red-300 mt-0.5"></p>
+      </div>
+      <button onclick="document.getElementById('global-error').classList.add('hidden')" class="text-red-400 hover:text-white text-xs">Cerrar</button>
+    </div>
+
+    <!-- ==================== SECCIÓN ESTADÍSTICAS ==================== -->
+    <section>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+          <span>📊</span> Métricas de Captura
+        </h2>
+        <span id="stats-total" class="text-xs font-medium text-slate-400 bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">
+          Total: -- elementos
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <!-- Tarjeta Ideas -->
+        <div class="card p-5 rounded-2xl bg-gradient-to-br from-slate-900/90 to-amber-950/20 border border-amber-500/30 relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium uppercase tracking-wider text-amber-400/90">Ideas</p>
+              <h3 id="stat-ideas" class="text-3xl sm:text-4xl font-extrabold text-white mt-2">--</h3>
+              <p class="text-xs text-slate-400 mt-1">Conceptos y proyectos anotados</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl shadow-inner shadow-amber-500/20">
+              💡
+            </div>
+          </div>
+        </div>
+
+        <!-- Tarjeta Tareas -->
+        <div class="card p-5 rounded-2xl bg-gradient-to-br from-slate-900/90 to-blue-950/20 border border-blue-500/30 relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium uppercase tracking-wider text-blue-400/90">Tareas</p>
+              <h3 id="stat-tareas" class="text-3xl sm:text-4xl font-extrabold text-white mt-2">--</h3>
+              <p class="text-xs text-slate-400 mt-1">Acciones pendientes en Todoist</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-2xl shadow-inner shadow-blue-500/20">
+              ✅
+            </div>
+          </div>
+        </div>
+
+        <!-- Tarjeta Recordatorios -->
+        <div class="card p-5 rounded-2xl bg-gradient-to-br from-slate-900/90 to-orange-950/20 border border-orange-500/30 relative overflow-hidden group">
+          <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl group-hover:bg-orange-500/20 transition-all"></div>
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium uppercase tracking-wider text-orange-400/90">Recordatorios</p>
+              <h3 id="stat-recordatorios" class="text-3xl sm:text-4xl font-extrabold text-white mt-2">--</h3>
+              <p class="text-xs text-slate-400 mt-1">Avisos y citas programadas</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-2xl shadow-inner shadow-orange-500/20">
+              ⏰
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== CONTENIDO PRINCIPAL: NOTAS & SISTEMA ==================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- ==================== SECCIÓN: ÚLTIMAS NOTAS (2 COLUMNAS) ==================== -->
+      <section class="lg:col-span-2 space-y-4">
+        
+        <div class="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-xl flex flex-col h-full">
+          
+          <!-- Encabezado de notas y filtros -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+            <div>
+              <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <span>📝</span> Últimas Notas Procesadas
+              </h2>
+              <p class="text-xs text-slate-400">Páginas registradas en Notion desde Telegram</p>
+            </div>
+
+            <!-- Filtros por categoría -->
+            <div class="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
+              <button onclick="filtrarNotas('todas')" id="filter-todas" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-medium transition-colors filter-btn">
+                Todas
+              </button>
+              <button onclick="filtrarNotas('Idea')" id="filter-Idea" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors filter-btn">
+                💡 Ideas
+              </button>
+              <button onclick="filtrarNotas('Tarea')" id="filter-Tarea" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors filter-btn">
+                ✅ Tareas
+              </button>
+              <button onclick="filtrarNotas('Recordatorio')" id="filter-Recordatorio" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors filter-btn">
+                ⏰ Recordatorios
+              </button>
+            </div>
+          </div>
+
+          <!-- Contenedor scrollable de notas -->
+          <div id="notes-container" class="mt-4 space-y-3 overflow-y-auto max-h-[580px] pr-2 custom-scrollbar flex-1">
+            <!-- Esqueleto de carga -->
+            <div class="space-y-3">
+              <div class="p-4 rounded-xl border border-slate-800 bg-slate-850">
+                <div class="h-4 w-1/4 rounded skeleton mb-3"></div>
+                <div class="h-5 w-3/4 rounded skeleton mb-2"></div>
+                <div class="h-4 w-full rounded skeleton"></div>
+              </div>
+              <div class="p-4 rounded-xl border border-slate-800 bg-slate-850">
+                <div class="h-4 w-1/3 rounded skeleton mb-3"></div>
+                <div class="h-5 w-2/3 rounded skeleton mb-2"></div>
+                <div class="h-4 w-5/6 rounded skeleton"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pie de notas -->
+          <div class="pt-3 border-t border-slate-800/80 mt-3 flex items-center justify-between text-xs text-slate-500">
+            <span id="notes-counter">Mostrando 0 notas</span>
+            <span>Límite: últimas 20</span>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ==================== SECCIÓN LATERAL: ESTADO & N8N (1 COLUMNA) ==================== -->
+      <section class="space-y-6">
+
+        <!-- ==================== ESTADO DEL SISTEMA ==================== -->
+        <div class="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-xl space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <span>🔌</span> Estado de Servicios
+            </h2>
+            <span id="services-health-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-800 text-slate-400">
+              Verificando...
+            </span>
+          </div>
+
+          <!-- Lista de servicios -->
+          <div class="space-y-2.5" id="services-list">
+            
+            <!-- n8n -->
+            <div class="p-3 rounded-xl bg-slate-850/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <div class="flex items-center gap-1.5 font-medium text-sm text-slate-200">
+                  <span>⚡</span> n8n Orquestador
+                </div>
+                <p class="text-[11px] text-slate-400">Corre en el servidor de Alex</p>
+              </div>
+              <div id="status-n8n" class="flex items-center gap-1 text-xs font-semibold text-slate-500">
+                <span>...</span>
+              </div>
+            </div>
+
+            <!-- LM Studio -->
+            <div class="p-3 rounded-xl bg-slate-850/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <div class="flex items-center gap-1.5 font-medium text-sm text-slate-200">
+                  <span>🧠</span> LM Studio (Qwen2.5)
+                </div>
+                <p class="text-[11px] text-slate-400">Corre en el servidor de Alex</p>
+              </div>
+              <div id="status-lm_studio" class="flex items-center gap-1 text-xs font-semibold text-slate-500">
+                <span>...</span>
+              </div>
+            </div>
+
+            <!-- Groq -->
+            <div class="p-3 rounded-xl bg-slate-850/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <div class="flex items-center gap-1.5 font-medium text-sm text-slate-200">
+                  <span>🎙️</span> Groq (Whisper STT)
+                </div>
+                <p class="text-[11px] text-slate-400">Transcripción ultrarrápida</p>
+              </div>
+              <div id="status-groq" class="flex items-center gap-1 text-xs font-semibold text-slate-500">
+                <span>...</span>
+              </div>
+            </div>
+
+            <!-- Todoist -->
+            <div class="p-3 rounded-xl bg-slate-850/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <div class="flex items-center gap-1.5 font-medium text-sm text-slate-200">
+                  <span>✅</span> Todoist
+                </div>
+                <p class="text-[11px] text-slate-400">Gestión de tareas por etiqueta</p>
+              </div>
+              <div id="status-todoist" class="flex items-center gap-1 text-xs font-semibold text-slate-500">
+                <span>...</span>
+              </div>
+            </div>
+
+            <!-- Notion -->
+            <div class="p-3 rounded-xl bg-slate-850/80 border border-slate-800 flex items-center justify-between">
+              <div>
+                <div class="flex items-center gap-1.5 font-medium text-sm text-slate-200">
+                  <span>📓</span> Notion
+                </div>
+                <p class="text-[11px] text-slate-400">Base de datos de notas de voz</p>
+              </div>
+              <div id="status-notion" class="flex items-center gap-1 text-xs font-semibold text-slate-500">
+                <span>...</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Nota de Arquitectura -->
+          <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800/90 text-slate-400 text-xs leading-relaxed flex items-start gap-2">
+            <span class="text-sm">ℹ️</span>
+            <span>
+              <strong>Nota:</strong> n8n y LM Studio corren en el backend del asistente. El dashboard solo lee los datos ya procesados.
+            </span>
+          </div>
+
+        </div>
+
+        <!-- ==================== ORQUESTADOR N8N ==================== -->
+        <div class="p-5 rounded-2xl bg-gradient-to-br from-slate-900/90 to-indigo-950/30 border border-indigo-500/20 shadow-xl space-y-4">
+          
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <span>⚙️</span> Flujo n8n
+            </h2>
+            <div id="n8n-badge" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400">
+              Comprobando...
+            </div>
+          </div>
+
+          <p id="n8n-desc" class="text-xs text-slate-300">
+            Orquestador del asistente de voz
+          </p>
+
+          <!-- Pipeline de Responsabilidades -->
+          <div class="space-y-1.5" id="n8n-pipeline">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">
+              Flujo de ejecución:
+            </div>
+            <ul id="n8n-resp-list" class="space-y-1.5 text-xs text-slate-300">
+              <li class="flex items-center gap-2 p-1.5 rounded-lg bg-slate-850/60 border border-slate-800/80">
+                <span>1️⃣</span> Recibe audios y textos de Telegram
+              </li>
+              <li class="flex items-center gap-2 p-1.5 rounded-lg bg-slate-850/60 border border-slate-800/80">
+                <span>2️⃣</span> Transcribe con Groq (Whisper)
+              </li>
+              <li class="flex items-center gap-2 p-1.5 rounded-lg bg-slate-850/60 border border-slate-800/80">
+                <span>3️⃣</span> Resume y clasifica con LM Studio (Qwen2.5)
+              </li>
+              <li class="flex items-center gap-2 p-1.5 rounded-lg bg-slate-850/60 border border-slate-800/80">
+                <span>4️⃣</span> Guarda en Todoist y Notion
+              </li>
+              <li class="flex items-center gap-2 p-1.5 rounded-lg bg-slate-850/60 border border-slate-800/80">
+                <span>5️⃣</span> Responde al usuario por Telegram
+              </li>
+            </ul>
+          </div>
+
+          <!-- Acción n8n (Online: Botón / Offline: Nota) -->
+          <div id="n8n-action-container" class="pt-2">
+            <!-- Se inyecta dinámicamente con JavaScript -->
+          </div>
+
+        </div>
+
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="border-t border-slate-800/80 bg-slate-950 py-4 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>Asistente de Voz · Sistema distribuido Telegram + n8n + FastAPI</p>
+      <p class="font-mono text-slate-600">v1.0.0 · Localhost:8000</p>
+    </div>
+  </footer>
+
+  <!-- ==================== JAVASCRIPT ==================== -->
+  <script>
+    // Variables globales de estado
+    let listaNotasGlobal = [];
+    let filtroActual = 'todas';
+    let segundosRestantes = 30;
+    let timerAutoRefresh = null;
+    let estaCargando = false;
+
+    // Inicialización al cargar la página
+    document.addEventListener('DOMContentLoaded', () => {
+      actualizarFechaEncabezado();
+      cargarTodo();
+      iniciarTemporizador();
+    });
+
+    // 1. Fecha formateada en español
+    function actualizarFechaEncabezado() {
+      const hoy = new Date();
+      const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      const fechaStr = hoy.toLocaleDateString('es-ES', opciones);
+      // Capitalizar primera letra
+      document.getElementById('current-date').textContent = fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1);
+    }
+
+    // 2. Temporizador de Auto-Refresh (30s)
+    function iniciarTemporizador() {
+      if (timerAutoRefresh) clearInterval(timerAutoRefresh);
+      segundosRestantes = 30;
+      actualizarDisplayCountdown();
+
+      timerAutoRefresh = setInterval(() => {
+        segundosRestantes--;
+        actualizarDisplayCountdown();
+        if (segundosRestantes <= 0) {
+          cargarTodo(false);
+          segundosRestantes = 30;
+        }
+      }, 1000);
+    }
+
+    function actualizarDisplayCountdown() {
+      const el = document.getElementById('countdown');
+      if (el) el.textContent = `${segundosRestantes}s`;
+    }
+
+    // 3. Orquestador de Carga Principal
+    async function cargarTodo(esManual = false) {
+      if (estaCargando) return;
+      estaCargando = true;
+
+      const refreshBtn = document.getElementById('btn-refresh');
+      const refreshIcon = document.getElementById('refresh-icon');
+      if (refreshBtn) refreshBtn.disabled = true;
+      if (refreshIcon) refreshIcon.classList.add('spinning');
+
+      // Si es manual, reseteamos el contador de 30s
+      if (esManual) segundosRestantes = 30;
+
+      try {
+        await Promise.allSettled([
+          cargarStats(),
+          cargarNotas(),
+          cargarEstado(),
+          cargarN8nInfo()
+        ]);
+        ocultarErrorGlobal();
+      } catch (err) {
+        mostrarErrorGlobal(`Error en la carga: ${err.message}`);
+      } finally {
+        estaCargando = false;
+        if (refreshBtn) refreshBtn.disabled = false;
+        if (refreshIcon) {
+          setTimeout(() => refreshIcon.classList.remove('spinning'), 500);
+        }
+      }
+    }
+
+    // 4. Cargar Estadísticas (/api/stats)
+    async function cargarStats() {
+      try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        animarNumero('stat-ideas', data.ideas ?? 0);
+        animarNumero('stat-tareas', data.tareas ?? 0);
+        animarNumero('stat-recordatorios', data.recordatorios ?? 0);
+
+        const total = (data.ideas ?? 0) + (data.tareas ?? 0) + (data.recordatorios ?? 0);
+        document.getElementById('stats-total').textContent = `Total: ${data.total ?? total} elementos`;
+      } catch (err) {
+        console.error('Error cargando stats:', err);
+        document.getElementById('stat-ideas').textContent = '?';
+        document.getElementById('stat-tareas').textContent = '?';
+        document.getElementById('stat-recordatorios').textContent = '?';
+      }
+    }
+
+    // 5. Cargar Notas (/api/notas)
+    async function cargarNotas() {
+      const container = document.getElementById('notes-container');
+      try {
+        const res = await fetch('/api/notas?limit=20');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        listaNotasGlobal = data.notas || [];
+        renderizarNotas();
+      } catch (err) {
+        console.error('Error cargando notas:', err);
+        container.innerHTML = `
+          <div class="p-6 text-center text-slate-400 bg-slate-900/40 rounded-xl border border-red-900/30">
+            <span class="text-3xl">⚠️</span>
+            <p class="mt-2 text-sm text-red-300 font-medium">No se pudieron cargar las notas.</p>
+            <p class="text-xs text-slate-500 mt-1">Verifique la conexión con el servidor o el fallback mock.</p>
+          </div>
+        `;
+        document.getElementById('notes-counter').textContent = 'Error al cargar';
+      }
+    }
+
+    // Renderizar lista de notas con filtro
+    function renderizarNotas() {
+      const container = document.getElementById('notes-container');
+      const counter = document.getElementById('notes-counter');
+
+      const notasFiltradas = listaNotasGlobal.filter(n => {
+        if (filtroActual === 'todas') return true;
+        return (n.categoria || '').toLowerCase() === filtroActual.toLowerCase();
+      });
+
+      counter.textContent = `Mostrando ${notasFiltradas.length} de ${listaNotasGlobal.length} notas`;
+
+      if (notasFiltradas.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center text-slate-500 bg-slate-900/30 rounded-xl border border-slate-800 flex flex-col items-center justify-center">
+            <span class="text-3xl mb-2">📭</span>
+            <p class="text-sm font-medium text-slate-300">No hay notas aún</p>
+            <p class="text-xs text-slate-500 mt-0.5">Las notas procesadas aparecerán aquí automáticamente.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = notasFiltradas.map(nota => {
+        const cat = (nota.categoria || 'Nota').trim();
+        const cfg = obtenerEstiloCategoria(cat);
+        const fechaFormateada = formatearFecha(nota.fecha);
+
+        return `
+          <div class="card p-4 rounded-xl bg-slate-850/90 hover:bg-slate-800/90 border border-slate-800/80 transition-all space-y-2.5">
+            <!-- Encabezado nota: Categoría y Fecha -->
+            <div class="flex items-center justify-between gap-2">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg.badgeClass}">
+                <span>${cfg.icono}</span>
+                <span>${cat}</span>
+              </span>
+              <span class="text-xs text-slate-400 font-mono">
+                📅 ${fechaFormateada}
+              </span>
+            </div>
+
+            <!-- Título -->
+            <h4 class="text-sm sm:text-base font-bold text-slate-100 leading-snug">
+              ${escaparHTML(nota.titulo || 'Sin título')}
+            </h4>
+
+            <!-- Resumen -->
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              ${escaparHTML(nota.resumen || 'Sin resumen disponible.')}
+            </p>
+
+            <!-- Transcripción (si existe) -->
+            ${nota.transcripcion ? `
+              <div class="mt-2 pt-2 border-t border-slate-800/70 text-[11px] text-slate-400 flex items-start gap-1.5 italic">
+                <span class="not-italic text-slate-500 font-semibold">🎙️ Transcripción:</span>
+                <span>"${escaparHTML(nota.transcripcion)}"</span>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Configuración estética por categoría
+    function obtenerEstiloCategoria(categoria) {
+      const c = (categoria || '').toLowerCase();
+      if (c.includes('idea')) {
+        return {
+          icono: '💡',
+          badgeClass: 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+        };
+      }
+      if (c.includes('tarea')) {
+        return {
+          icono: '✅',
+          badgeClass: 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+        };
+      }
+      if (c.includes('recordatorio')) {
+        return {
+          icono: '⏰',
+          badgeClass: 'bg-orange-500/10 text-orange-300 border-orange-500/30'
+        };
+      }
+      return {
+        icono: '📌',
+        badgeClass: 'bg-slate-700/40 text-slate-300 border-slate-600/40'
+      };
+    }
+
+    // Filtrado de notas
+    function filtrarNotas(cat) {
+      filtroActual = cat;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-slate-800', 'text-slate-300');
+      });
+      const activeBtn = document.getElementById(`filter-${cat}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-800', 'text-slate-300');
+        activeBtn.classList.add('bg-indigo-600', 'text-white');
+      }
+      renderizarNotas();
+    }
+
+    // 6. Cargar Estado de los Servicios (/api/estado)
+    async function cargarEstado() {
+      try {
+        const res = await fetch('/api/estado');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Actualizar Badge de Modo
+        actualizarBadgeModo(data.modo);
+
+        // Actualizar cada servicio
+        actualizarIndicadorServicio('status-n8n', data.n8n, 'n8n');
+        actualizarIndicadorServicio('status-lm_studio', data.lm_studio, 'LM Studio');
+        actualizarIndicadorServicio('status-groq', data.groq, 'Groq');
+        actualizarIndicadorServicio('status-todoist', data.todoist, 'Todoist');
+        actualizarIndicadorServicio('status-notion', data.notion, 'Notion');
+
+        // Badge general de salud de servicios
+        const serviciosActivos = [data.n8n, data.lm_studio, data.groq, data.todoist, data.notion].filter(Boolean).length;
+        const healthBadge = document.getElementById('services-health-badge');
+        if (healthBadge) {
+          healthBadge.textContent = `${serviciosActivos}/5 activos`;
+          healthBadge.className = `text-xs px-2 py-0.5 rounded-full font-medium ${
+            serviciosActivos >= 4 ? 'bg-emerald-500/20 text-emerald-300' :
+            serviciosActivos >= 2 ? 'bg-amber-500/20 text-amber-300' :
+            'bg-red-500/20 text-red-300'
+          }`;
+        }
+      } catch (err) {
+        console.error('Error cargando estado:', err);
+      }
+    }
+
+    function actualizarIndicadorServicio(id, estado, nombre) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      if (estado === true) {
+        el.innerHTML = `
+          <span class="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+            <span>✓</span> Online
+          </span>
+        `;
+      } else {
+        el.innerHTML = `
+          <span class="inline-flex items-center gap-1 text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded-md">
+            <span>✕</span> Offline
+          </span>
+        `;
+      }
+    }
+
+    function actualizarBadgeModo(modo) {
+      const badge = document.getElementById('mode-badge');
+      if (!badge) return;
+
+      if (modo === 'real') {
+        badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm';
+        badge.innerHTML = `
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>Modo Real (APIs Conectadas)</span>
+        `;
+      } else if (modo === 'mixto') {
+        badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30';
+        badge.innerHTML = `
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span>Modo Mixto (Parcial)</span>
+        `;
+      } else {
+        badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30';
+        badge.innerHTML = `
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span>Modo Mock (Datos de prueba)</span>
+        `;
+      }
+    }
+
+    // 7. Cargar Información de n8n (/api/n8n-info)
+    async function cargarN8nInfo() {
+      const badge = document.getElementById('n8n-badge');
+      const actionContainer = document.getElementById('n8n-action-container');
+      const desc = document.getElementById('n8n-desc');
+
+      try {
+        const res = await fetch('/api/n8n-info');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (desc && data.descripcion) desc.textContent = data.descripcion;
+
+        const isOnline = data.estado === 'online';
+
+        // Badge n8n
+        if (badge) {
+          badge.className = `px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+            isOnline ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                       'bg-slate-800 text-slate-400 border border-slate-700'
+          }`;
+          badge.textContent = isOnline ? 'Online' : 'Offline';
+        }
+
+        // Acción según online / offline
+        if (actionContainer) {
+          if (isOnline) {
+            actionContainer.innerHTML = `
+              <a href="${escaparHTML(data.url || 'http://localhost:5678')}" target="_blank" rel="noopener noreferrer"
+                 class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 border border-indigo-500 transition-all">
+                <span>🔗</span> Abrir n8n (${escaparHTML(data.url || 'localhost:5678')})
+              </a>
+            `;
+          } else {
+            actionContainer.innerHTML = `
+              <div class="p-3 rounded-xl bg-slate-850/90 border border-slate-800 text-slate-400 text-xs flex items-center gap-2">
+                <span class="text-amber-400">⚠️</span>
+                <span>El orquestador corre en la PC de Alex (${escaparHTML(data.url || 'http://localhost:5678')}).</span>
+              </div>
+            `;
+          }
+        }
+      } catch (err) {
+        console.error('Error cargando n8n info:', err);
+        if (badge) {
+          badge.textContent = 'Desconectado';
+          badge.className = 'px-2 py-0.5 rounded-full text-xs font-semibold bg-red-950 text-red-400 border border-red-800';
+        }
+        if (actionContainer) {
+          actionContainer.innerHTML = `
+            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-xs">
+              El orquestador corre en la PC de Alex.
+            </div>
+          `;
+        }
+      }
+    }
+
+    // 8. Utilidades de Formateo y UX
+    function formatearFecha(isoString) {
+      if (!isoString) return 'Sin fecha';
+      try {
+        const fecha = new Date(isoString);
+        if (isNaN(fecha.getTime())) return isoString;
+
+        const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const dia = fecha.getDate();
+        const mes = meses[fecha.getMonth()];
+        const horas = String(fecha.getHours()).padStart(2, '0');
+        const minutos = String(fecha.getMinutes()).padStart(2, '0');
+
+        return `${dia} de ${mes}, ${horas}:${minutos}`;
+      } catch {
+        return isoString;
+      }
+    }
+
+    function animarNumero(id, valorFinal) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = valorFinal;
+    }
+
+    function escaparHTML(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function mostrarErrorGlobal(msg) {
+      const el = document.getElementById('global-error');
+      const text = document.getElementById('global-error-msg');
+      if (el && text) {
+        text.textContent = msg;
+        el.classList.remove('hidden');
+      }
+    }
+
+    function ocultarErrorGlobal() {
+      const el = document.getElementById('global-error');
+      if (el) el.classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
