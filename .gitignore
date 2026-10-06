@@ -1,0 +1,28 @@
+# Entorno virtual y dependencias
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Variables de entorno y credenciales (seguridad)
+.env
+backend/.env
+*.env
+*.env.local
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs y SO
+*.log
+.DS_Store
+Thumbs.db
